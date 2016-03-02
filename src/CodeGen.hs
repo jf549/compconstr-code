@@ -113,6 +113,9 @@ standardEntry (MkLambdaForm fvs uf vs e) = do
     -- a more efficient implementation might leave them on the stack
     -- if possible
     -- YOUR CODE HERE
+    (args, p, v) <- loadArgs (0, 0) vs
+    adjustStack PtrStk (-p)
+    adjustStack ValStk (-v)
 
     -- compile the expression
     compExpr e
@@ -224,6 +227,9 @@ allocClosures (MkBind (Var n _) lf t : bs)
 
         -- write the closure on the heap
         -- YOUR CODE HERE
+        allocMemory n s
+        writeHeap s tbl
+        storeVarsOnHeap (s - 1) (lfVars lf)
 
         -- continue with the other bindings
         allocClosures bs
@@ -340,6 +346,8 @@ compAlgAltCont env (AAlt c vs e t) = do
 
     -- pattern variables will be on the heap
     -- YOUR CODE HERE
+    deallocateMemory (1 + length vs)
+    loadHeapArgs 1 vs
 
     -- generate the code for the expression
     compExpr e
@@ -446,13 +454,16 @@ compExpr (AppE f [] t) | isPrimitive t =
 compExpr (AppE f as _) = do
     -- push arguments onto the appropriate stacks and adjust the stack
     -- pointers accordingly
-    undefined
+    (v, p) <- pushArgs (0, 0) (reverse as)
+    adjustStack ValStk v
+    adjustStack PtrStk p
 
     -- enter the closure pointed to by f
     withVar (varName f) $ \sym -> compEnter sym
 compExpr (CtrE c as t) = do
     -- obtain the return vector from the value stack
-    undefined
+    loadRegisterFromStack RetVecR ValStk 0
+    adjustStack ValStk (-1)
 
     -- allocate a closure for the arguments
     unless (null as) $ do
@@ -460,7 +471,8 @@ compExpr (CtrE c as t) = do
         -- a pointer to the constructor's info table
         -- NOTE: the info table bit is not implemented, since it is slightly
         --       tricky -- see the note in the definition of `compAlgDefault'
-        undefined
+        allocMemory "_c" (1 + length as)
+        storeAtomsOnHeap (length as) as
 
         -- set the node register to the right location
         withVar "_c" $ \sym -> writeRegister NodeR sym
@@ -474,18 +486,21 @@ compExpr (CtrE c as t) = do
         (Just i) -> jump (IndexSym (RegisterSym RetVecR) i (MonoTy $ AlgTy "_Cont"))
 compExpr (OpE op [x,y] _) = do
     -- pop the continuation off the pointer stack
+    k <- loadLocalFromStack ValStk 0 "_k" (MonoTy $ AlgTy "_Cont")
+    adjustStack ValStk (-1)
 
     -- compile the operator application
+    compBuiltIn op x y
 
     -- jump to the continuation
-    undefined
+    jump k
 compExpr (LitE v _) = do
     -- pop the continuation off the pointer stack
     k <- loadLocalFromStack ValStk 0 "_k" (MonoTy $ AlgTy "_Cont")
     adjustStack ValStk (-1)
 
     -- set the return register value
-    -- returnVal v
+    returnVal v
 
     -- jump to the continuation
     jump k
