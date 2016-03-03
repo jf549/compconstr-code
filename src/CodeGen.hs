@@ -227,7 +227,7 @@ allocClosures (MkBind (Var n _) lf t : bs)
 
         -- write the closure on the heap
         -- YOUR CODE HERE
-        allocMemory n s
+        allocMemory n s t
         writeHeap s tbl
         storeVarsOnHeap (s - 1) (lfVars lf)
 
@@ -471,7 +471,7 @@ compExpr (CtrE c as t) = do
         -- a pointer to the constructor's info table
         -- NOTE: the info table bit is not implemented, since it is slightly
         --       tricky -- see the note in the definition of `compAlgDefault'
-        allocMemory "_c" (1 + length as)
+        allocMemory "_c" (1 + length as) t
         storeAtomsOnHeap (length as) as
 
         -- set the node register to the right location
