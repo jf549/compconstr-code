@@ -229,7 +229,7 @@ allocClosures (MkBind (Var n _) lf t : bs)
         -- YOUR CODE HERE
         allocMemory n s t
         writeHeap s tbl
-        storeVarsOnHeap (s - 1) (lfVars lf)
+        storeVarsOnHeap (s - 1) (lfFreeVars lf)
 
         -- continue with the other bindings
         allocClosures bs
