@@ -519,33 +519,61 @@ compEvac :: ALambdaForm PolyType -> CodeGen (Symbol Function)
 compEvac lf = withNewFunction "_evac_" $ do
     -- 1. allocate memory for the closure represented by `lf' in the to-space
     --    and assign an arbitrary name to that region in memory
+    let
+        s = closureSize lf
+
+    allocMemory "_closure" s closureTy
 
     -- 2. copy the current closure's (pointed to by Node) info pointer to the
     --    new location in to-space
+    writeHeap s (IndexSym (RegisterSym NodeR) 0 closureTy)
 
     -- 3. copy the free variables of the current closure to the new location
     --    in to-space
+    copyVars (s - 1) 1
 
     -- 4. overwrite the current closure (still pointed to by Node) with the
     --    forwarding pointer. Note: the forwarding pointer expects that
     --    the address of the closure in to-space is stored as a free variable
     --    in the closure at offset 1.
+    writeRegisterIx NodeR 0 forwardPtrTbl
+    withVar "_closure" $ \sym -> writeRegisterIx NodeR 1 sym
 
     -- 5. return the pointer to the location of the closure in to-space to
     --    the calling C procedure
-
-    -- make the C compiler happy (remove this once you have implemented
-    -- your code generation code)
-    returnSymbol (PrimSym $ MkPrimInt 0)
+    withVar "_closure" returnSymbol
 
 -- | `compScavenge vs` generates code for a closure's scavaging code.
 compScavenge :: [AVar PolyType] -> CodeGen (Symbol Function)
 compScavenge vs = withNewFunction "_scavenge_" $ do
     -- 1. back up the Node register
+    c <- loadLocalFromRegister NodeR "_node" closureTy
 
     -- 2. call the evac and scavenging code for each pointer
+    callEvacAndScav c vs 1
 
     -- return something to make gcc happy (don't remove this)
     returnSymbol (RegisterSym NodeR)
+
+--------------------------------------------------------------------------------
+
+-- | 'copyVars i pos' copies 'i' variables to the to-space, starting at offset
+--    -'i' on the heap and 'pos' in the closure, increasing with each variable.
+copyVars :: Int -> Int -> CodeGenFn ()
+copyVars 0 _ = return ()
+copyVars i pos = do
+    writeHeap i (IndexSym (RegisterSym NodeR) pos closureTy)
+    copyVars (i - 1) (pos + 1)
+
+-- | 'callEvacAndScav' calls the evacuation and scavenging code for the
+--   variables 'vs' in the closure, starting from index 'pos'.
+callEvacAndScav :: Symbol Local -> [AVar PolyType] -> Int -> CodeGenFn ()
+callEvacAndScav _ [] _ = return ()
+callEvacAndScav node (v:vs) pos = do
+    unless (isPrimitive (varAnn v)) $ do
+        callEvac node pos
+        callScav node pos
+
+    callEvacAndScav node vs (pos + 1)
 
 --------------------------------------------------------------------------------
