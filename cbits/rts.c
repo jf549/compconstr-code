@@ -153,36 +153,28 @@ CodeLabel run_gc()
 
     // 1. switch to the opposite heap and adjust the heap pointers to positions
     //    in the new heap
-
-
-
-
-
-
-
+    Heap = (Heap == HeapA) ? HeapB : HeapA;
+    Hp = Heap;
+    HLimit = Heap + HEAP_SIZE - 1;
 
     // 2. run GC on the root set
 #ifdef DEBUG
     printf("The root set consists of %d elements.\n", SpPtr - Stack);
 #endif
 
-
-
-
-
-
+    for (; RootPtr < SpPtr; RootPtr++) {
+        CodeLabel Evac = ((Closure)*RootPtr)[0][1];
+        CodeLabel Scav = ((Closure)*RootPtr)[0][2];
+        *RootPtr = (*Evac)();
+        (*Scav)();
+    }
 
     // 3. once garbage collection has completed on the root set, the evacuation
     // code for the closure pointed to by CurrentNode should return the address
     // of the corresponding closure in to-space -- we will want to continue
     // execution with that closure
-
-
-
-
-
-
-
+    Node = (*NodeEvac)();
+    (*NodeScav)();
 
     // calculate how much memory we have now
     usedToMemory = Hp - Heap;
