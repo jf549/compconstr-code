@@ -35,9 +35,9 @@ instance DoesHeapAlloc (AExpr a) where
 
 instance DoesHeapAlloc (AAlts a) where
     heapCost (PrimAlts [] d) = heapCost d
-    heapCost (PrimAlts as d) = sum (map heapCost as) + heapCost d
+    heapCost (PrimAlts as d) = maximum (heapCost d : map heapCost as)
     heapCost (AlgAlts [] d)  = heapCost d
-    heapCost (AlgAlts as d)  = sum (map heapCost as) + heapCost d
+    heapCost (AlgAlts as d)  = maximum (heapCost d : map heapCost as)
 
 instance DoesHeapAlloc (ADefaultAlt a) where
     heapCost (Default e t)      = heapCost e
